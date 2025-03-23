@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block title %}Security Groups{% endblock %}
+
+{% block content %}
+<h1 class="text-xl font-bold mb-4">Security Groups</h1>
+<form method="get" class="mb-4 flex items-center gap-4">
+  <label class="text-sm font-medium text-gray-700">VPC</label>
+  <select name="vpc_id" onchange="this.form.submit()"
+          class="border border-gray-300 rounded px-3 py-1 text-sm">
+    <option value="">-- All --</option>
+    {% for vpc in vpc_ids %}
+      <option value="{{ vpc }}" {% if vpc == selected_vpc_id %}selected{% endif %}>
+        {{ vpc }}
+      </option>
+    {% endfor %}
+  </select>
+
+  <label class="text-sm font-medium text-gray-700">Direction</label>
+  <select name="direction" onchange="this.form.submit()"
+          class="border border-gray-300 rounded px-3 py-1 text-sm">
+    <option value="">-- All --</option>
+    <option value="Inbound" {% if selected_direction == 'Inbound' %}selected{% endif %}>Inbound</option>
+    <option value="Outbound" {% if selected_direction == 'Outbound' %}selected{% endif %}>Outbound</option>
+  </select>
+
+
+</form>
+
+<table class="w-full table-auto border-collapse border border-gray-300 text-sm">
+  <thead class="bg-gray-50 text-left">
+    <tr>
+      <th class="border px-3 py-2">Account</th>
+      <th class="border px-3 py-2">VPC ID</th>
+      <th class="border px-3 py-2">Name</th>
+      <th class="border px-3 py-2">SG ID</th>
+      <th class="border px-3 py-2">Direction</th>
+      <th class="border px-3 py-2">Protocol</th>
+      <th class="border px-3 py-2">Port</th>
+      <th class="border px-3 py-2">CIDR / SG</th>
+      <th class="border px-3 py-2">Description</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for group in sg_groups %}
+      {% for row in group.rules %}
+        <tr class="border-t hover:bg-gray-50">
+          {% if forloop.first %}
+            <td rowspan="{{ group.rowspan }}" class="px-3 py-2">{{ row.account_id }}</td>
+            <td rowspan="{{ group.rowspan }}" class="px-3 py-2">{{ row.vpc_id }}</td>
+            <td rowspan="{{ group.rowspan }}" class="px-3 py-2">{{ row.name }}</td>
+            <td rowspan="{{ group.rowspan }}" class="px-3 py-2">{{ row.group_id }}</td>
+          {% endif %}
+          <td class="px-3 py-2">{{ row.direction }}</td>
+          <td class="px-3 py-2">{{ row.protocol }}</td>
+          <td class="px-3 py-2">{{ row.port }}</td>
+          <td class="px-3 py-2">{{ row.cidr }}</td>
+          <td class="px-3 py-2">{{ row.desc }}</td>
+        </tr>
+      {% endfor %}
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}
