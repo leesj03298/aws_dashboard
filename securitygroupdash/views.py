@@ -1,28 +1,17 @@
-import boto3
 from django.shortcuts import render
-from collections import defaultdict
+from common.aws_multi import with_all_accounts
 
-def securitygroup_list(request):
-    ec2 = boto3.client('ec2', region_name='ap-northeast-2')
-    sts = boto3.client('sts')
-    account_id = sts.get_caller_identity()['Account']
-
-    # ✅ GET 파라미터로부터 필터 값
-    selected_vpc_id = request.GET.get('vpc_id')
-    selected_direction = request.GET.get('direction')
-
+def fetch_security_groups(session, account_id, selected_vpc_id=None):
+    ec2 = session.client('ec2', region_name='ap-northeast-2')
     response = ec2.describe_security_groups()
-    grouped_sgs = defaultdict(list)
-    vpc_ids_set = set()
+    grouped_sgs = {}
 
     for sg in response['SecurityGroups']:
         vpc_id = sg.get('VpcId', '')
-        vpc_ids_set.add(vpc_id)
-
-        # ✅ VPC ID 필터
         if selected_vpc_id and vpc_id != selected_vpc_id:
             continue
 
+    for sg in response['SecurityGroups']:
         tags = {t['Key']: t['Value'] for t in sg.get('Tags', [])}
         name = tags.get('Name') or sg.get('GroupName')
 
@@ -30,29 +19,23 @@ def securitygroup_list(request):
             'account_id': account_id,
             'name': name,
             'group_id': sg['GroupId'],
-            'vpc_id': vpc_id,
+            'vpc_id': sg.get('VpcId', ''),
             'tags': tags,
         }
 
-        # ✅ Inbound
-        if not selected_direction or selected_direction == 'Inbound':
-            for perm in sg.get('IpPermissions', []):
-                grouped_sgs[sg['GroupId']].extend(
-                    parse_permission(perm, base_info, 'Inbound')
-                )
+        rules = []
 
-        # ✅ Outbound
-        if not selected_direction or selected_direction == 'Outbound':
-            for perm in sg.get('IpPermissionsEgress', []):
-                grouped_sgs[sg['GroupId']].extend(
-                    parse_permission(perm, base_info, 'Outbound')
-                )
+        for perm in sg.get('IpPermissions', []):
+            rules.extend(parse_permission(perm, base_info, 'Inbound'))
 
-    # ✅ SG 병합 리스트 구성
+        for perm in sg.get('IpPermissionsEgress', []):
+            rules.extend(parse_permission(perm, base_info, 'Outbound'))
+
+        if rules:
+            grouped_sgs[sg['GroupId']] = rules
+
     sg_groups = []
     for group_id, rules in grouped_sgs.items():
-        if not rules:
-            continue
         rules.sort(key=lambda r: (r['direction'], r['cidr'] or ''))
         sg_groups.append({
             'group_id': group_id,
@@ -60,18 +43,7 @@ def securitygroup_list(request):
             'rules': rules,
         })
 
-    # ✅ VPC 정렬
-    sg_groups.sort(key=lambda g: g['rules'][0]['vpc_id'])
-
-    # ✅ VPC 목록 전달
-    vpc_ids = sorted(vpc_ids_set)
-
-    return render(request, 'securitygroupdash/securitygroup_list.html', {
-        'sg_groups': sg_groups,
-        'vpc_ids': vpc_ids,
-        'selected_vpc_id': selected_vpc_id,
-        'selected_direction': selected_direction,
-    })
+    return sg_groups
 
 
 def parse_permission(perm, base_info, direction):
@@ -104,3 +76,26 @@ def parse_permission(perm, base_info, direction):
         results.append({**base_info, 'direction': direction, 'protocol': protocol,
                         'port': port_display, 'cidr': ref.get('GroupId'), 'desc': ref.get('Description', '')})
     return results
+
+def securitygroup_list(request):
+    selected_vpc_id = request.GET.get('vpc_id')
+    selected_account_id = request.GET.get('account_id')
+
+    def fetch(session, account_id, account_name):
+        if selected_account_id and account_id != selected_account_id:
+            return []
+        return fetch_security_groups(session, account_id, selected_vpc_id)
+
+    sg_groups = with_all_accounts(fetch)
+    sg_groups.sort(key=lambda g: g['rules'][0]['vpc_id'])
+
+    account_ids = sorted({g['rules'][0]['account_id'] for g in sg_groups if g['rules']})
+    vpc_ids = sorted({g['rules'][0]['vpc_id'] for g in sg_groups if g['rules']})
+
+    return render(request, 'securitygroupdash/securitygroup_list.html', {
+        'sg_groups': sg_groups,
+        'account_ids': account_ids,
+        'vpc_ids': vpc_ids,
+        'selected_account_id': selected_account_id,
+        'selected_vpc_id': selected_vpc_id,
+    })

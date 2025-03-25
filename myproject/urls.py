@@ -25,5 +25,6 @@ urlpatterns = [
     path('route/', include('routetabledash.urls')),
     path('securitygroup/', include('securitygroupdash.urls')),
     path('loadbalancer/', include('loadbalancerdash.urls')),
+    path('targetgroup/', include('targetgroupdash.urls')),
 
 ]

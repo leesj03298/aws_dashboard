@@ -4,6 +4,15 @@
 {% block content %}
 <h1 class="text-xl font-bold mb-4">Security Groups</h1>
 <form method="get" class="mb-4 flex items-center gap-4">
+  <label class="text-sm font-medium text-gray-700">Account</label>
+  <select name="account_id" onchange="this.form.submit()"
+          class="border border-gray-300 rounded px-3 py-1 text-sm">
+    <option value="">-- All --</option>
+    {% for aid in account_ids %}
+      <option value="{{ aid }}" {% if aid == selected_account_id %}selected{% endif %}>{{ aid }}</option>
+    {% endfor %}
+  </select>
+
   <label class="text-sm font-medium text-gray-700">VPC</label>
   <select name="vpc_id" onchange="this.form.submit()"
           class="border border-gray-300 rounded px-3 py-1 text-sm">

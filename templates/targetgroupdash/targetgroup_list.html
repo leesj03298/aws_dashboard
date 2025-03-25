@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}Target Groups{% endblock %}
+
+{% block content %}
+<h1 class="text-2xl font-bold mb-4">Target Groups</h1>
+
+<form method="get" class="mb-4 flex items-center gap-4">
+  <label class="text-sm font-medium text-gray-700">Account</label>
+  <select name="account_id" onchange="this.form.submit()"
+          class="border border-gray-300 rounded px-3 py-1 text-sm">
+    <option value="">-- All --</option>
+    {% for aid in account_ids %}
+      <option value="{{ aid }}" {% if aid == selected_account_id %}selected{% endif %}>{{ aid }}</option>
+    {% endfor %}
+  </select>
+
+  <label class="text-sm font-medium text-gray-700">VPC</label>
+  <select name="vpc_id" onchange="this.form.submit()"
+          class="border border-gray-300 rounded px-3 py-1 text-sm">
+    <option value="">-- All --</option>
+    {% for vpc in vpc_ids %}
+      <option value="{{ vpc }}" {% if vpc == selected_vpc_id %}selected{% endif %}>{{ vpc }}</option>
+    {% endfor %}
+  </select>
+</form>
+
+<table class="w-full table-auto border-collapse border border-gray-300 text-sm">
+  <thead class="bg-gray-50 text-left">
+    <tr>
+      <th class="border px-3 py-2">Account</th>
+      <th class="border px-3 py-2">Name</th>
+      <th class="border px-3 py-2">VPC ID</th>
+      <th class="border px-3 py-2">Protocol</th>
+      <th class="border px-3 py-2">Port</th>
+      <th class="border px-3 py-2">Target Type</th>
+      <th class="border px-3 py-2">Health Check</th>
+      <th class="border px-3 py-2">Target Status</th>
+      <th class="border px-3 py-2"># Targets</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for tg in target_groups %}
+    <tr class="border-t hover:bg-gray-50">
+      <td class="px-3 py-2 text-xs text-gray-500 font-mono">{{ tg.account_id }}</td>
+      <td class="px-3 py-2">{{ tg.name }}</td>
+      <td class="px-3 py-2 text-xs font-mono">{{ tg.vpc_id }}</td>
+      <td class="px-3 py-2">{{ tg.protocol }}</td>
+      <td class="px-3 py-2 text-right">{{ tg.port }}</td>
+      <td class="px-3 py-2">{{ tg.target_type }}</td>
+      <td class="px-3 py-2 text-xs text-gray-600">{{ tg.health_check }}</td>
+      <td class="px-3 py-2 text-xs text-gray-600">{{ tg.target_status }}</td>
+      <td class="px-3 py-2 text-right">{{ tg.target_count }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

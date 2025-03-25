@@ -1,34 +1,47 @@
-# vpcdash/views.py
-
-import boto3
 from django.shortcuts import render
+from common.aws_multi import with_all_accounts
 
-def vpc_list(request):
-    ec2 = boto3.client('ec2', region_name='ap-northeast-2')
-    sts = boto3.client('sts')
-    account_id = sts.get_caller_identity()['Account']  
+def fetch_vpcs(session, account_id, account_name):
+    ec2 = session.client('ec2', region_name='ap-northeast-2')
+    vpcs = ec2.describe_vpcs()['Vpcs']
+    igws = ec2.describe_internet_gateways()['InternetGateways']
 
-    vpcs = []
-    vpc_data = ec2.describe_vpcs()['Vpcs']
-    igw_data = ec2.describe_internet_gateways()['InternetGateways']
+    # VPC ID 기준으로 IGW 연결 여부 확인용 set
+    igw_vpc_ids = {
+        a['VpcId']
+        for igw in igws
+        for a in igw.get('Attachments', [])
+        if a.get('State') == 'available'
+    }
 
-    # IGW 연결된 VPC ID 추출
-    igw_attached_vpc_ids = set()
-    for igw in igw_data:
-        for attachment in igw.get('Attachments', []):
-            if attachment['State'] == 'available':
-                igw_attached_vpc_ids.add(attachment['VpcId'])
-
-    for vpc in vpc_data:
+    rows = []
+    for vpc in vpcs:
+        vpc_id = vpc['VpcId']
+        cidr = vpc['CidrBlock']
+        state = vpc['State']
         tags = {t['Key']: t['Value'] for t in vpc.get('Tags', [])}
-        vpcs.append({
-            'account_id': account_id, 
-            'id': vpc['VpcId'],
-            'name': tags.get('Name', ''),
-            'cidr': vpc['CidrBlock'],
-            'state': vpc['State'],
-            'has_igw': vpc['VpcId'] in igw_attached_vpc_ids,
+        name = tags.get('Name', '')
+        has_igw = vpc_id in igw_vpc_ids
+
+        rows.append({
+            'account_id': account_id,
+            'name': name,
+            'id': vpc_id,
+            'cidr': cidr,
+            'state': state,
+            'has_igw': has_igw,
             'tags': tags
         })
 
-    return render(request, 'vpcdash/vpc_list.html', {'vpcs': vpcs})
+    return rows
+
+
+def vpc_list(request):
+    vpcs = with_all_accounts(fetch_vpcs)
+
+    # 정렬 (예: VPC ID 기준)
+    vpcs.sort(key=lambda x: x['id'])
+
+    return render(request, 'vpcdash/vpc_list.html', {
+        'vpcs': vpcs
+    })

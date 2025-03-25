@@ -1,25 +1,16 @@
-import boto3
 from django.shortcuts import render
+from common.aws_multi import with_all_accounts
 
-def route_table_list(request):
-    ec2 = boto3.client('ec2', region_name='ap-northeast-2')
-    sts = boto3.client('sts')
-    account_id = sts.get_caller_identity()['Account']
-
-    # ✅ GET 파라미터에서 선택된 VPC ID 가져오기
-    selected_vpc_id = request.GET.get('vpc_id')
+def fetch_route_tables(session, account_id, account_name):
+    ec2 = session.client('ec2', region_name='ap-northeast-2')
+    response = ec2.describe_route_tables()
 
     route_tables = []
-    vpc_ids_set = set()
-
-    response = ec2.describe_route_tables()
 
     for rtb in response['RouteTables']:
         tags = {t['Key']: t['Value'] for t in rtb.get('Tags', [])}
         vpc_id = rtb.get('VpcId', '')
-        vpc_ids_set.add(vpc_id)  # ✅ VPC ID 목록 저장
 
-        # Associations
         associations = []
         for assoc in rtb.get('Associations', []):
             associations.append({
@@ -27,7 +18,6 @@ def route_table_list(request):
                 'default': assoc.get('Main', False)
             })
 
-        # Routes
         routes = []
         for route in rtb.get('Routes', []):
             cidr = route.get('DestinationCidrBlock') or route.get('DestinationIpv6CidrBlock', '')
@@ -38,11 +28,13 @@ def route_table_list(request):
                 route.get('InstanceId') or
                 'local'
             )
-            routes.append({'cidr': cidr, 'target': target})
+            routes.append({
+                'cidr': cidr,
+                'target': target
+            })
 
         # ✅ local 우선 정렬
         routes.sort(key=lambda r: 0 if r['target'] == 'local' else 1)
-        route_tables.sort(key=lambda x: x['vpc_id'])
 
         # 병합용 zip
         max_len = max(len(associations), len(routes))
@@ -61,15 +53,15 @@ def route_table_list(request):
             'rowspan': max_len
         })
 
-    # ✅ 선택된 VPC ID로 필터링
-    if selected_vpc_id:
-        route_tables = [r for r in route_tables if r['vpc_id'] == selected_vpc_id]
+    return route_tables
 
-    # ✅ VPC ID 목록 추출 (select box용)
-    vpc_ids = sorted(vpc_ids_set)
+
+def route_table_list(request):
+    route_tables = with_all_accounts(fetch_route_tables)
+
+    # ✅ VPC 기준 정렬
+    route_tables.sort(key=lambda x: x['vpc_id'])
 
     return render(request, 'routetabledash/routetable_list.html', {
-        'route_tables': route_tables,
-        'vpc_ids': vpc_ids,
-        'selected_vpc_id': selected_vpc_id,
+        'route_tables': route_tables
     })
